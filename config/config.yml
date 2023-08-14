@@ -1,0 +1,14 @@
+queries:
+  - ENCFF232ABR
+  - ENCFF200RSU
+species:
+  - human
+  - mouse
+reference_name: gencode
+minimum_orf_length_nt: 100
+top_orf_cpat: 50
+cpat_first_cutoff_human: 0.725
+cpat_second_cutoff_human: 0.364
+cpat_first_cutoff_mouse: 0.721
+cpat_second_cutoff_mouse: 0.440
+blast_e_value: 1.0e-10

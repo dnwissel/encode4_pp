@@ -1,0 +1,301 @@
+from snakemake.utils import min_version
+
+min_version("7.30.1")
+
+configfile: "config/config.yaml"
+
+rule all:
+    input:
+        expand(f"results/protein_prediction/{sample}_protein.gtf", sample=config["queries"]),
+        expand(f"results/protein_prediction/{sample}_ORF.fasta", sample=config["queries"]),
+        expand(f"results/protein_prediction/{sample}_protein.fasta", sample=config["queries"]),
+        expand(f"results/protein_prediction/{sample}_protein_annotation.tsv", sample=config["queries"]),
+        expand(f"results/protein_prediction/{sample}_blastp.out", sample=config["queries"]),
+
+rule prep_make_query:
+    input:
+        query="data-raw/ENCFF{sample}.gtf",
+        genome="data-raw/{species}.fa"
+    output:
+        "results/ENCFF{sample}_orfanage_ready_query.gtf"
+    singularity:
+        "docker://condaforge/mambaforge:23.1.0-3"
+    conda:
+        "envs/gffread.yaml"
+    shell:
+        "cat input.query | gffread -g input.genome -T -o output -"
+
+rule orf_prediction_run_orfanage:
+    input:
+        query="results/ENCFF{sample}_orfanage_ready_query.gtf",
+        genome="data-raw/{species}.fa",
+        annotation="data-raw/{species}_gencode.gtf"
+    output:
+        "results/ENCFF{sample}_orfanage_cds.gtf"
+    singularity:
+        "docker://condaforge/mambaforge:23.1.0-3"
+    conda:
+        "envs/orfanage.yaml"
+    shell:
+        """orfanage \
+                    --non_aug \
+                    --reference input.genome \
+                    --query input.query \
+                    --output orfanage_query.gtf \
+                    input.annotation \
+                    1> ENCFF{sample}_orfanage.output\
+                    2>ENCFF{sample}_orfanage.error"""
+
+rule orf_prediction_filter_orfanage:
+    input:
+        orfanage_cds="results/ENCFF{sample}_orfanage_cds.gtf",
+        minimum_orf_length=config["minimum_orf_length_nt"]
+    output:
+        "{sample}_cpat_cds_to_be_predicted.gtf"
+        "{sample}_orfanage_cds_filtered.gtf"
+    singularity:
+        "docker://condaforge/mambaforge:23.1.0-3"
+    conda:
+        "envs/default.yml"
+    shell:
+        """python scripts/filter_orfanage.py \
+            --orfanage_gtf_file_path {input.orfanage_cds} \
+            --output_prefix {sample} \
+            --minimum_orf_length {input.minimum_orf_length}"""
+
+rule orf_prediction_extract_sequence_for_cpat:
+    input:
+        genome="data-raw/{species}.fa",
+        query="results/{sample}_cpat_cds_to_be_predicted.gtf"
+    output:
+        "results/ENCFF{sample}_missing_cds.fasta"
+    singularity:
+        "docker://condaforge/mambaforge:23.1.0-3"
+    conda:
+        "envs/gffread.yaml"
+    shell:
+        "gffread -w {output} -g {input.genome} {input.query}"
+
+rule orf_prediction_run_cpat:
+    input:
+        hexamer="data-raw/{species_hexamer}_Hexamer.tsv",
+        logit_model="data-raw/{species_logit_model}_logitModel.RData",
+        query="results/ENCFF{sample}_missing_cds.fasta",
+        min_orf=config["minimum_orf_length_nt"],
+        top_orf=config["top_orf_cpat"],
+    output:
+        "results/CPAT_run_info.log",
+        "results/ENCFF{sample}.r",
+        "results/ENCFF{sample}.ORF_seqs.fa",
+        "results/ENCFF{sample}.ORF_prob.tsv",
+        "results/ENCFF{sample}.ORF_prob.best.tsv",
+        "results/ENCFF{sample}_cpat.output",
+        "results/ENCFF{sample}_cpat.error",
+        "results/ENCFF{sample}.no_ORF.txt",
+    singularity:
+        "docker://condaforge/mambaforge:23.1.0-3"
+    conda:
+        "envs/cpat.yaml"
+    shell:
+        """cpat.py \
+                -x {input.hexamer} \
+                -d {input.logit_model} \
+                -g {input.query} \
+                --min-orf={input.min_orf} \
+                --top-orf={input.top_orf} \
+                -o ENCFF{sample} \
+                1> ENCFF{sample}_cpat.output\
+                2>ENCFF{sample}_cpat.error"""
+
+rule orf_prediction_filter_cpat:
+    input:
+        input_file_path="results/{sample}.ORF_prob.tsv",
+        query=expand(f"{query}", query=config["queries"]),
+        first_cutoff=expand(config[f"cpat_first_cutoff_{species}"], species=config["species"]),
+        second_cutoff=expand(config[f"cpat_second_cutoff_{species}"], species=config["species"])
+    output:
+        "results/ENCFF{sample}.ORF_remaining.tsv"
+    singularity:
+        "docker://condaforge/mambaforge:23.1.0-3"
+    conda:
+        "envs/default.yml"
+    shell:
+        """python scripts/filter_cpat.py \
+            --input_file_path {input.input_file_path}
+            --output_prefix {input.query} \
+            --first_cutoff {input.first_cutoff} \
+            --second_cutoff {input.second_cutoff}"""
+
+rule postprocess_create_cpat_cds_coordinates:
+    input:
+        query=expand(f"{query}", query=config["queries"])
+        sample_gtf="results/ENCFF{sample}_cpat_cds_to_be_predicted.gtf",
+        called_orfs="results/ENCFF{sample}.ORF_remaining.tsv",
+    output:
+        "results/ENCFF{sample}_cpat_with_cds.gtf"
+    singularity:
+        "docker://condaforge/mambaforge:23.1.0-3"
+    conda:
+        "envs/proteogenomics.yml"
+    shell:
+        """python scripts/create_cpat_CDS_coordinates.py \
+                                --name {input.query} \
+                                --sample_gtf {input.sample_gtf} \
+                                --called_orfs {input.called_orfs}"""
+
+                
+
+rule postprocess_create_combined_cds_gtf:
+    input:
+        cpat_cds="results/ENCFF{results}_cpat_with_cds.gtf",
+        orfanage_cds="ENCFF200RSU_orfanage_cds_filtered.gtf"
+    output:
+        "results/protein_prediction/ENCFF{sample}_protein.gtf"
+    singularity:
+        "docker://condaforge/mambaforge:23.1.0-3"
+    conda:
+        "envs/gffread.yaml"
+    shell:
+        "cat {input.cpat_cds} {input.orfanage_cds} | gffread - -T | sort -k1,1V -k4,4n -k5,5rn -k3,3r | gffread - -T > {output}"
+
+
+
+rule postprocess_extract_orf_fasta:
+    input:
+        protein_gtf="results/protein_prediction/ENCFF{sample}_protein.gtf",
+        genome="data-raw/{species}.fa"
+    output:
+        "results/protein_prediction/ENCFF{sample}_ORF.fasta"
+    singularity:
+        "docker://condaforge/mambaforge:23.1.0-3"
+    conda:
+        "envs/gffread.yaml"
+    shell:
+        "gffread -x {output} -g {input.genome} {input.protein_gtf}"
+
+rule postprocess_extract_orf_fasta:
+    input:
+        protein_gtf="results/protein_prediction/ENCFF{sample}_protein.gtf",
+        genome="data-raw/{species}.fa"
+    output:
+        "results/protein_prediction/ENCFF{sample}_protein.fasta"
+    singularity:
+        "docker://condaforge/mambaforge:23.1.0-3"
+    conda:
+        "envs/gffread.yaml"
+    shell:
+        "gffread -y {output} -g {input.genome} {input.protein_gtf}"
+
+rule postprocess_prepare_sqanti_protein_gtf:
+    input:
+        protein_gtf="results/protein_prediction/ENCFF{sample}_protein.gtf",
+        annotation="data-raw/{species}_gencode.gtf"
+        expand(reference_name=f'{config["reference_name"]}_{species}', species=config["species"])
+    output:
+        expand(f"results/{config['reference_name']}_{species}.transcript_exons_only.gtf", species=config["species"]),
+        expand(f"results/{config['reference_name']}_{species}.cds_renamed_exon.gtf", species=config["species"])
+        "results/ENCFF{sample}.transcript_exons_only.gtf",
+        "results/ENCFF{sample}.cds_renamed_exon.gtf",        
+    singularity:
+        "docker://condaforge/mambaforge:23.1.0-3"
+    conda:
+        "envs/proteogenomics.yml"
+    shell:
+        """python scripts/rename_cds_to_exon.py \
+            --sample_gtf {input.protein_gtf} \
+            --sample_name {sample} \
+            --reference_gtf {input.annotation} \
+            --reference_name {input.reference_name} \
+            --num_cores {threads}"""
+
+rule postprocess_prepare_sqanti_protein_tsv:
+    input:
+        query=expand(f"{query}", query=config["queries"]),
+    output:
+        "results/ENCFF{sample}_best_orf.tsv"
+    singularity:
+        "docker://condaforge/mambaforge:23.1.0-3"
+    conda:
+        "envs/default.yml"
+    shell:
+        """python scripts/create_orf_table_for_sqanti_protein.py \
+                    --transcript_exons_path "{input.query}.transcript_exons_only.gtf" \
+                    --cds_only_path "{input.query}.cds_renamed_exon.gtf" \
+                    --output_prefix {input.query}"""
+
+rule postprocess_run_sqanti_protein:
+    input:
+        query=expand(f"{query}", query=config["queries"]),
+    output:
+        "results/{sample}.sqanti_protein_classification.tsv",
+        "results/{sample}.cds_renamed_exon.genePred",
+        "results/refAnnotation_{sample}.genePred",
+        "results/{sample}.transcript_exons_only.genePred"
+    singularity:
+        "docker://condaforge/mambaforge:23.1.0-3"
+    conda:
+        "envs/proteogenomics.yml"
+    shell:
+        """python scripts/sqanti3_protein.py \
+                    {input.query}.transcript_exons_only.gtf \
+                    {input.query}.cds_renamed_exon.gtf \
+                    {input.query}_best_orf.tsv \
+                    gencode_{species}.transcript_exons_only.gtf \
+                    gencode_{species}.cds_renamed_exon.gtf \
+                    -d ./ \
+                    -p {input.query}"""
+
+rule postprocess_summarize_all:
+    input:
+        query=expand(f"{query}", query=config["queries"]),
+    output:
+        "results/protein_prediction/{sample}_protein_annotation.tsv"
+    singularity:
+        "docker://condaforge/mambaforge:23.1.0-3"
+    conda:
+        "envs/default.yml"
+    shell:
+        """python scripts/create_protein_overview_table.py \
+            --best_orf_path {input.query}_best_orf.tsv \
+            --sqanti_protein_path "{input.query}.sqanti_protein_classification.tsv" \
+            --output_prefix {input.query}"""
+
+rule postprocess_create_blast_db:
+    input:
+        protein_fasta="data-raw/gencode.{gencode_vers}.pc_translations.fa"
+    output:
+        "results/gencode.{gencode_version}.pc_translations.pog",
+        "results/gencode.{gencode_version}.pc_translations.psd",
+        "results/gencode.{gencode_version}.pc_translations.psi",
+        "results/gencode.{gencode_version}.pc_translations.phr",
+        "results/gencode.{gencode_version}.pc_translations.pin",
+        "results/gencode.{gencode_version}.pc_translations.psq",
+    singularity:
+        "docker://condaforge/mambaforge:23.1.0-3"
+    conda:
+        "envs/blast.yml"
+    shell:
+        """makeblastdb \
+                -in {input.protein_fasta} \
+                -dbtype prot \
+                -parse_seqids \
+                -out "{output}""""
+
+rule postprocess_run_blast:
+    input:
+        blast_evalue=config["blast_e_value"],
+        blast_db="",
+        protein_gtf="results/protein_prediction/{sample}_protein.gtf",
+    output:
+        "results/protein_prediction/{sample}_blastp.out"
+    singularity:
+        "docker://condaforge/mambaforge:23.1.0-3"
+    conda:
+        "envs/blast.yml"
+    shell:
+        """blastp \
+            -evalue {input.blast_evalue} \
+            -num_threads {threads} \
+            -db {input.blast_db} \
+            -query {input.protein_gtf} > \
+            {output}""""
