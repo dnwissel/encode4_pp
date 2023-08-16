@@ -199,8 +199,12 @@ def main(
         .values
     )
 
-    annotation_positive_strand = annotation.loc[annotation["strand"] == "+"]
-    annotation_negative_strand = annotation.loc[annotation["strand"] == "-"]
+    annotation_positive_strand = annotation.loc[
+        annotation["strand"] == "+"
+    ].copy(deep=True)
+    annotation_negative_strand = annotation.loc[
+        annotation["strand"] == "-"
+    ].copy(deep=True)
     annotation_negative_strand["orf_end"] = (
         annotation_negative_strand["len"]
         - annotation_negative_strand["orf_start"]

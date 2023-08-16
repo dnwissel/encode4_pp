@@ -4,6 +4,9 @@ queries:
 species:
   - human
   - mouse
+annotation_versions:
+  - v40
+  - vM25
 reference_name: gencode
 minimum_orf_length_nt: 100
 top_orf_cpat: 50

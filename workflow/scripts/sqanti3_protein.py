@@ -68,12 +68,6 @@ utilitiesPath = os.path.join(
     os.path.dirname(os.path.realpath(__file__)), "utilities"
 )
 sys.path.insert(0, utilitiesPath)
-GTF2GENEPRED_PROG = os.path.join(
-    os.path.dirname(os.path.realpath(__file__)),
-    "SQANTI3",
-    "utilities",
-    "gtfToGenePred",
-)
 GFFREAD_PROG = "gffread"
 
 # importing functions from original sqanti3
@@ -98,7 +92,7 @@ def reference_parser(args, genome_chroms):
     global referenceFiles
 
     referenceFiles = os.path.join(
-        args.dir, "refAnnotation_" + args.output_prefix + ".genePred"
+        args.dir, args.output_prefix + "_refAnnotation.genePred"
     )
     print("**** Parsing Reference Transcriptome....", file=sys.stdout)
 
@@ -1382,18 +1376,18 @@ def isoformClassification(
                         for c in range(exon.start, exon.end):
                             m[rec.length - i - 1] = c
                             i += 1
-                #print(m.keys())
+                # print(m.keys())
                 try:
                     isoform_hit.CDS_genomic_start = (
-                    m[isoform_hit.CDS_start - 1] + 1
-                )  # make it 1-based
+                        m[isoform_hit.CDS_start - 1] + 1
+                    )  # make it 1-based
                 except Exception as e:
                     print(isoform_hit.CDS_start)
                     print(rec.exons[0])
-                    #print(m)
+                    # print(m)
                     print(rec.strand)
                     raise e
-            
+
                 # NOTE: if using --orf_input, it is possible to see discrepancy between the exon structure
                 # provided by GFF and the input ORF. For now, just shorten it
                 isoform_hit.CDS_genomic_end = (

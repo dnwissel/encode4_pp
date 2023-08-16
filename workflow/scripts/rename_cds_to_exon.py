@@ -3,6 +3,7 @@
 import argparse
 import csv
 import multiprocessing
+import warnings
 
 import gtfparse
 import numpy as np
@@ -45,12 +46,10 @@ def transform_cds(gtf):
     # only keep transcriipt and CDS rows
     gtf_cds = gtf.query('feature in ["transcript","CDS"]')
     # rename CDS to exon and update transcript range
-    gtf_cds["feature"] = np.where(
-        gtf_cds["feature"] == "CDS", "exon", "transcript"
-    )
+    gtf_cds.loc[gtf_cds["feature"] == "CDS", "feature"] = "exon"
     gtf_cds = gtf_cds.groupby("transcript_id").apply(set_transcript_ranges)
     # only keep transcripts that have a CDS
-    sizes = gtf_cds.groupby("transcript_id").size()
+    sizes = gtf_cds.reset_index(drop=True).groupby("transcript_id").size()
     transcripts_with_cds = list(sizes[sizes > 1].index)
     gtf_cds = gtf_cds.query(f"transcript_id in {transcripts_with_cds}")
     return gtf_cds
@@ -93,7 +92,7 @@ def process_gtf_multiprocess(sample, name, num_cores):
     # transform cds info
     chromosomes = sample["seqname"].unique()
     sample_split = [
-        sample[sample["seqname"] == csome] for csome in chromosomes
+        sample.loc[sample["seqname"] == csome] for csome in chromosomes
     ]
     pool = multiprocessing.Pool(processes=num_cores)
     sample_cds_split = pool.map(process_gtf_single, sample_split)
@@ -149,12 +148,6 @@ def main():
         help="sample gtf file",
     )
     parser.add_argument(
-        "--reference_name",
-        action="store",
-        dest="reference_name",
-        help="sample name",
-    )
-    parser.add_argument(
         "--num_cores",
         action="store",
         dest="num_cores",
@@ -163,12 +156,15 @@ def main():
         type=int,
     )
     results = parser.parse_args()
+    warnings.simplefilter(action="ignore", category=FutureWarning)
 
     process_sample_rename(
         results.sample_gtf, results.sample_name, results.num_cores
     )
     process_reference_rename(
-        results.reference_gtf, results.reference_name, results.num_cores
+        results.reference_gtf,
+        results.sample_name + "_gencode",
+        results.num_cores,
     )
 
 

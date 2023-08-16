@@ -6,6 +6,7 @@
 
 import argparse
 import copy
+import warnings
 from collections import defaultdict
 
 import gtfparse
@@ -93,12 +94,12 @@ def make_pacbio_cds_gtf(sample_gtf, called_orfs, name):
     # import gtf, only exon info.
     # only move forward with representative pb isoform (for same-protein groups)
     gtf = gtfparse.read_gtf(sample_gtf)
-    gtf_gene_mapping = gtf[gtf["feature"] == "transcript"]
+    gtf_gene_mapping = gtf.loc[gtf["feature"] == "transcript"]
     gtf_gene_mapping = gtf_gene_mapping[["transcript_id", "gene_id"]]
     gtf = gtf[
         ["seqname", "feature", "start", "end", "strand", "transcript_id"]
     ]
-    gtf = gtf[gtf["feature"] == "exon"]
+    gtf = gtf.loc[gtf["feature"] == "exon"]
     gtf.columns = ["chr", "feat", "start", "end", "strand", "acc"]
     # only move forward with "base accession" (representative pb)
     # pb coords into dict
@@ -126,12 +127,14 @@ def make_pacbio_cds_gtf(sample_gtf, called_orfs, name):
     ranges = pd.read_table(called_orfs)[
         ["transcript_id", "ORF_start", "ORF_end"]
     ]
-    #print(gtf_gene_mapping)
-    #print(gtf_gene_mapping.gene_id)
-    #pb_gene = pd.Series(
+    # print(gtf_gene_mapping)
+    # print(gtf_gene_mapping.gene_id)
+    # pb_gene = pd.Series(
     #    gtf_gene_mapping["gene_id"], index=gtf_gene_mapping["transcript_id"]
-    #).to_dict()
-    pb_gene = dict(zip(gtf_gene_mapping["transcript_id"], gtf_gene_mapping["gene_id"]))
+    # ).to_dict()
+    pb_gene = dict(
+        zip(gtf_gene_mapping["transcript_id"], gtf_gene_mapping["gene_id"])
+    )
     with open(f"{name}_cpat_with_cds.gtf", "w") as ofile:
         for i, row in ranges.iterrows():
             acc, orf_start, orf_end = row
@@ -159,13 +162,9 @@ def make_pacbio_cds_gtf(sample_gtf, called_orfs, name):
                 # write out the coordinates
                 # out_acc = f'transcript_id "{acc}";'
                 # acc_w_gene_w_cpm = gene + "|" + acc
-                out_acc = (
-                    f'transcript_id "{acc}"; gene_id "{gene}";'
-                )
+                out_acc = f'transcript_id "{acc}"; gene_id "{gene}";'
 
-                out_acc_exon = (
-                    f'transcript_id "{acc}";'
-                )
+                out_acc_exon = f'transcript_id "{acc}";'
 
                 tstart, tend = get_min_and_max_coords_from_exon_chain(coords)
                 ofile.write(
@@ -249,6 +248,7 @@ def main():
         results.called_orfs,
         results.name,
     )
+    warnings.simplefilter(action="ignore", category=FutureWarning)
 
 
 if __name__ == "__main__":

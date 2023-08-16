@@ -7,3 +7,10 @@ dependencies:
   - python=3.10.0
   - typeguard=4.1.0
   - pandas=1.5.3
+  - biopython=1.8.1
+
+export PATH=/home/dwissel/micromamba/envs/snakemake/bin:/home/dwissel/bin:/home/dwissel/micromamba/condabin:/usr/local/sbin:/usr/bin:/usr/local/bin:/usr/sbin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin
+
+export PATH=/home/dwissel/micromamba/envs/snakemake/bin:/home/dwissel/bin:/home/dwissel/micromamba/condabin:/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin
+
+

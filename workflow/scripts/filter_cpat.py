@@ -11,7 +11,7 @@ from typeguard import typechecked
 @typechecked
 def main(
     input_file_path: str,
-    output_prefix: str,
+    output_path: str,
     first_cutoff: float,
     second_cutoff: float,
 ) -> int:
@@ -44,7 +44,7 @@ def main(
     ).head(
         1
     ).to_csv(
-        f"{output_prefix}.ORF_remaining.tsv",
+        f"{output_path}",
         sep="\t",
         index=False,
         header=True,
@@ -56,14 +56,14 @@ if __name__ == "__main__":
 
     parser = ArgumentParser()
     parser.add_argument("--input_file_path")
-    parser.add_argument("--output_prefix")
+    parser.add_argument("--output_path")
     parser.add_argument("--first_cutoff")
     parser.add_argument("--second_cutoff")
 
     args = parser.parse_args()
     main(
         input_file_path=args.input_file_path,
-        output_prefix=args.output_prefix,
+        output_path=args.output_path,
         first_cutoff=float(args.first_cutoff),
         second_cutoff=float(args.second_cutoff),
     )
