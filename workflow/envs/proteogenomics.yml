@@ -28,4 +28,4 @@ dependencies:
   - bioconda:gffread
 
   - pip:
-      - git+https://github.com/dnwissel/SQANTI3_pip
+      - git+https://github.com/dnwissel/SQANTI3_pip.git@95d98d28218bc067ad48f40543ef93c2d5413afa

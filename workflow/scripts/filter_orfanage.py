@@ -42,11 +42,12 @@ def main(
     cds["width"] = cds["stop"] - cds["start"] + ZERO_ONE_INDEX_OFFSET
 
     cds["cumwidth"] = cds.groupby("transcript_id")["width"].transform(
-        lambda x: pd.Series(x).cumsum() + STOP_CODON_NT
+        lambda x: pd.Series(x).cumsum()
     )
     cds_with_sufficient_length = set(
         np.unique(cds.loc[cds["cumwidth"] >= minimum_orf_length].transcript_id)
     )
+
     # Reload GTF to avoid cleanup.
     output_df = pd.read_csv(input_file_path, sep="\t", header=None)
     mask = np.array(

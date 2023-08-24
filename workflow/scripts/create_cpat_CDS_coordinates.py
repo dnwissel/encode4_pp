@@ -243,12 +243,12 @@ def main():
     )
 
     results = parser.parse_args()
+    warnings.simplefilter(action="ignore", category=FutureWarning)
     make_pacbio_cds_gtf(
         results.sample_gtf,
         results.called_orfs,
         results.name,
     )
-    warnings.simplefilter(action="ignore", category=FutureWarning)
 
 
 if __name__ == "__main__":
