@@ -34,19 +34,15 @@ def main(
     df_second_cutoff = df.loc[df["Coding_prob"] > second_cutoff]
     pd.concat(
         [
-            df_first_cutoff.sort_values(
-                ["ORF", "Coding_prob"], ascending=False
-            )
+            df_first_cutoff.sort_values(["ORF", "Coding_prob"], ascending=False)
             .groupby("transcript_id")
             .head(1),
-            df_second_cutoff.sort_values(
-                ["ORF", "Coding_prob"], ascending=False
-            )
+            df_second_cutoff.sort_values(["ORF", "Coding_prob"], ascending=False)
             .groupby("transcript_id")
             .head(1),
-            # df.sort_values(["ORF", "Coding_prob"], ascending=False)
-            # .groupby("transcript_id")
-            # .head(1),
+            df.sort_values(["ORF", "Coding_prob"], ascending=False)
+            .groupby("transcript_id")
+            .head(1),
         ],
         axis=0,
         ignore_index=True,
@@ -66,7 +62,6 @@ def main(
 
 
 if __name__ == "__main__":
-
     parser = ArgumentParser()
     parser.add_argument("--input_file_path")
     parser.add_argument("--orf_input_seq_path")
