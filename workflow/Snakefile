@@ -20,7 +20,7 @@ rule all:
 rule prep_make_query:
     input:
         query="data-raw/{sample}.gtf",
-        genome="data-raw/{sample}_genome.fa",
+        genome="data-raw/{sample}_genome.fasta",
     output:
         "results/{sample}_orfanage_ready_query.gtf"
     container:
@@ -33,7 +33,7 @@ rule prep_make_query:
 rule prep_make_annotation:
     input:
         annotation="data-raw/{sample}_annotation.gtf",
-        genome="data-raw/{sample}_genome.fa",
+        genome="data-raw/{sample}_genome.fasta",
     output:
         "results/{sample}_orfanage_ready_annotation.gtf"
     container:
@@ -47,7 +47,7 @@ rule prep_make_annotation:
 rule orf_prediction_run_orfanage:
     input:
         query="results/{sample}_orfanage_ready_query.gtf",
-        genome="data-raw/{sample}_genome.fa",
+        genome="data-raw/{sample}_genome.fasta",
         annotation="results/{sample}_orfanage_ready_annotation.gtf",
     output:
         "results/{sample}_orfanage_cds.gtf"
@@ -67,19 +67,6 @@ rule orf_prediction_run_orfanage:
                     {input.annotation} \
                     1>results/{wildcards.sample}_orfanage.output \
                     2>results/{wildcards.sample}_orfanage.error"""
-
-# rule orf_prediction_get_orfanage_orfs:
-#     input:
-#         orfanage_cds="results/{sample}_orfanage_cds.gtf",
-#         genome="data-raw/{sample}_genome.fa",
-#     output:
-#         "results/{sample}_orfanage_orfs.fa"
-#     container:
-#         f"docker://condaforge/mambaforge:{config['mambaforge_version']}"
-#     conda:
-#         "envs/orfanage.yml"
-#     shell:
-#         """gffread -x {output} -g {input.genome} {input.orfanage_cds}"""
 
 rule orf_prediction_filter_orfanage:
     input:
@@ -103,9 +90,9 @@ rule orf_prediction_filter_orfanage:
 rule orf_prediction_orf_sequence_orfanage_with_stop_codon:
     input:
         orfanage_cds="results/{sample}_orfanage_cds_filtered.gtf",
-        genome="data-raw/{sample}_genome.fa",
+        genome="data-raw/{sample}_genome.fasta",
     output:
-        "results/{sample}_orfanage_orfs.fa"
+        "results/{sample}_orfanage_orfs.fasta"
     container:
         f"docker://condaforge/mambaforge:{config['mambaforge_version']}"
     conda:
@@ -129,7 +116,7 @@ rule orf_prediction_correct_stop_codon_orfanage:
 
 rule orf_prediction_extract_sequence_for_cpat:
     input:
-        genome="data-raw/{sample}_genome.fa",
+        genome="data-raw/{sample}_genome.fasta",
         query="results/{sample}_cpat_cds_to_be_predicted.gtf"
     output:
         "results/{sample}_missing_cds.fasta"
@@ -147,7 +134,7 @@ rule orf_prediction_run_cpat_human:
         query=f"results/{config['queries'][0]}_missing_cds.fasta",
     output:
         f"results/{config['queries'][0]}.r",
-        f"results/{config['queries'][0]}.ORF_seqs.fa",
+        f"results/{config['queries'][0]}.ORF_seqs.fasta",
         f"results/{config['queries'][0]}.ORF_prob.tsv",
         f"results/{config['queries'][0]}.ORF_prob.best.tsv",
         f"results/{config['queries'][0]}_cpat.output",
@@ -178,7 +165,7 @@ rule orf_prediction_run_cpat_mouse:
         query=f"results/{config['queries'][1]}_missing_cds.fasta",
     output:
         f"results/{config['queries'][1]}.r",
-        f"results/{config['queries'][1]}.ORF_seqs.fa",
+        f"results/{config['queries'][1]}.ORF_seqs.fasta",
         f"results/{config['queries'][1]}.ORF_prob.tsv",
         f"results/{config['queries'][1]}.ORF_prob.best.tsv",
         f"results/{config['queries'][1]}_cpat.output",
@@ -206,7 +193,7 @@ rule orf_prediction_run_cpat_mouse:
 rule orf_prediction_filter_cpat_human:
     input:
         input_file_path=f"results/{config['queries'][0]}.ORF_prob.tsv",
-        orf_input_seq_path=f"results/{config['queries'][0]}.ORF_seqs.fa",
+        orf_input_seq_path=f"results/{config['queries'][0]}.ORF_seqs.fasta",
     output:
         f"results/{config['queries'][0]}.ORF_remaining.tsv"
     container:
@@ -227,7 +214,7 @@ rule orf_prediction_filter_cpat_human:
 rule orf_prediction_filter_cpat_mouse:
     input:
         input_file_path=f"results/{config['queries'][1]}.ORF_prob.tsv",
-        orf_input_seq_path=f"results/{config['queries'][1]}.ORF_seqs.fa",
+        orf_input_seq_path=f"results/{config['queries'][1]}.ORF_seqs.fasta",
     output:
         f"results/{config['queries'][1]}.ORF_remaining.tsv"
     container:
@@ -247,8 +234,8 @@ rule orf_prediction_filter_cpat_mouse:
 
 rule postprocess_check_orf_completeness:
     input:
-        cpat_seqs="results/{sample}.ORF_seqs.fa",
-        orfanage_seqs="results/{sample}_orfanage_orfs.fa",
+        cpat_seqs="results/{sample}.ORF_seqs.fasta",
+        orfanage_seqs="results/{sample}_orfanage_orfs.fasta",
         cpat_info="results/{sample}.ORF_remaining.tsv",
         orfanage_info="results/{sample}_orfanage_cds_filtered_stop_codon_corrected.gtf",
     output:
@@ -313,7 +300,7 @@ rule postprocess_create_combined_cds_gtf:
 rule postprocess_extract_orf_fasta:
     input:
         protein_gtf="results/protein_prediction/{sample}_protein.gtf",
-        genome="data-raw/{sample}_genome.fa"
+        genome="data-raw/{sample}_genome.fasta"
     output:
         "results/protein_prediction/{sample}_ORF.fasta"
     container:
@@ -326,7 +313,7 @@ rule postprocess_extract_orf_fasta:
 rule postprocess_extract_protein_fasta:
     input:
         protein_gtf="results/protein_prediction/{sample}_protein.gtf",
-        genome="data-raw/{sample}_genome.fa"
+        genome="data-raw/{sample}_genome.fasta"
     output:
         "results/protein_prediction/{sample}_protein.fasta"
     container:
@@ -417,9 +404,9 @@ rule postprocess_summarize_all:
 
 rule postprocess_prepare_protein_fasta_for_blast:
     input:
-        protein_fasta="data-raw/gencode.{gencode_vers}.pc_translations.fa"
+        protein_fasta="data-raw/gencode.{gencode_vers}.pc_translations.fasta"
     output:
-        "results/gencode.{gencode_vers}.pc_translations_renamed.fa"
+        "results/gencode.{gencode_vers}.pc_translations_renamed.fasta"
     container:
         f"docker://condaforge/mambaforge:{config['mambaforge_version']}"
     conda:
@@ -429,7 +416,7 @@ rule postprocess_prepare_protein_fasta_for_blast:
 
 rule postprocess_create_blast_db:
     input:
-        protein_fasta="results/gencode.{gencode_vers}.pc_translations_renamed.fa"
+        protein_fasta="results/gencode.{gencode_vers}.pc_translations_renamed.fasta"
     output:
         "results/gencode.{gencode_vers}.pc_translations.pog",
     container:
@@ -446,7 +433,7 @@ rule postprocess_create_blast_db:
 rule postprocess_run_blast:
     input:
         protein_fasta="results/protein_prediction/{sample}_protein.fasta",
-        protein_reference="data-raw/gencode.{gencode_vers}.pc_translations.fa",
+        protein_reference="data-raw/gencode.{gencode_vers}.pc_translations.fasta",
         dbs="results/gencode.{gencode_vers}.pc_translations.pog",
     output:
         "results/protein_prediction/{sample}_{gencode_vers}_blastp.out"
