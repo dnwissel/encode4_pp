@@ -308,7 +308,7 @@ rule postprocess_create_combined_cds_gtf:
     conda:
         "envs/gffread.yml"
     shell:
-        "cat {input.cpat_cds} {input.orfanage_cds} | gffread - -T | sort -k1,1V -k4,4n -k5,5rn -k3,3r | gffread - -T > {output}"
+        "cat {input.cpat_cds} {input.orfanage_cds} | sort -k1,1V -k4,4n -k5,5rn -k3,3r | gffread - -T > {output}"
 
 rule postprocess_extract_orf_fasta:
     input:
