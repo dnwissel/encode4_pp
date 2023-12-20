@@ -14,7 +14,7 @@ rule all:
         expand("results/{sample}_best_orf.tsv", sample=config['queries']),
         expand("results/{sample}.sqanti_protein_classification.tsv", sample=config['queries']),
         #expand("results/protein_prediction/{sample}_protein_annotation.tsv", sample=config['queries']),
-        expand("results/protein_prediction/{sample}_protein_annotation_{gencode_vers}.tsv"),
+        #expand("results/protein_prediction/{sample}_protein_annotation_{gencode_vers}.tsv"),
         f"results/protein_prediction/{config['queries'][0]}_protein_annotation_{config['annotation_versions'][0]}.tsv",
         f"results/protein_prediction/{config['queries'][1]}_protein_annotation_{config['annotation_versions'][1]}.tsv",
         f"results/protein_prediction/{config['queries'][0]}_{config['annotation_versions'][0]}_blastp.out",
