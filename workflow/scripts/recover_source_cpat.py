@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-
+import csv
 from argparse import ArgumentParser
 
 import pandas as pd
@@ -53,6 +53,7 @@ def main(
         sep="\t",
         index=False,
         header=False,
+        quoting=csv.QUOTE_NONE
     )
     return 0
 

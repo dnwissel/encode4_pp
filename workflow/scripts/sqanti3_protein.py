@@ -8,24 +8,30 @@
 __author__ = "etseng@pacb.com"
 __version__ = "2.0.0"  # Python 3.7
 
-# import pdb
-import os, re, sys, subprocess, timeit, glob, copy
+import argparse
+import bisect
+import copy
+import glob
 
 # import shutil
 # import distutils.spawn
 import itertools
-import bisect
-import argparse
 import math
+
+# import pdb
+import os
+import re
+import subprocess
+import sys
+import timeit
+from collections import Counter, defaultdict, namedtuple
+from collections.abc import Iterable
+from csv import DictReader, DictWriter
+
 import numpy as np
 from scipy import mean
-from collections import defaultdict, Counter, namedtuple
-from collections.abc import Iterable
-from csv import DictWriter, DictReader
 
-utilitiesPath = os.path.join(
-    os.path.dirname(os.path.realpath(__file__)), "utilities"
-)
+utilitiesPath = os.path.join(os.path.dirname(os.path.realpath(__file__)), "utilities")
 sys.path.insert(0, utilitiesPath)
 # from multiprocessing import Process
 
@@ -36,8 +42,8 @@ sys.path.insert(0, utilitiesPath)
 
 
 try:
-    from Bio.Seq import Seq
     from Bio import SeqIO
+    from Bio.Seq import Seq
     from Bio.SeqRecord import SeqRecord
 except ImportError:
     print(
@@ -56,28 +62,26 @@ except ImportError:
     sys.exit(-1)
 
 
+from cupcake.io.GFF import collapseGFFReader, write_collapseGFF_format
+
 # so gloria can run cupcake and gtf tools on mac
 # cupcake_dir = '/Users/gloriasheynkman/Documents/research_drive/bioinfo_tools/cDNA_Cupcake/'
 # if cupcake_dir not in sys.path:
 #     sys.path.append('/Users/gloriasheynkman/Documents/research_drive/bioinfo_tools/cDNA_Cupcake/')
 from cupcake.tofu.compare_junctions import compare_junctions
-from cupcake.io.GFF import collapseGFFReader, write_collapseGFF_format
 
 GTF2GENEPRED_PROG = "gtfToGenePred"
-utilitiesPath = os.path.join(
-    os.path.dirname(os.path.realpath(__file__)), "utilities"
-)
+utilitiesPath = os.path.join(os.path.dirname(os.path.realpath(__file__)), "utilities")
 sys.path.insert(0, utilitiesPath)
 GFFREAD_PROG = "gffread"
 
 # importing functions from original sqanti3
 from SQANTI3.sqanti3_qc import (
-    myQueryTranscripts,
+    associationOverlapping,
     genePredReader,
     myQueryProteins,
-    associationOverlapping,
+    myQueryTranscripts,
 )
-
 
 # functions that were modified to run "sqanti protein" (gloria and liz)
 
@@ -164,9 +168,7 @@ def reference_parser(args, genome_chroms):
             known_5_3_by_gene[r.gene]["end"].add(r.txEnd)
 
     # check that all genes' chromosomes are in the genome file
-    ref_chroms = set(refs_1exon_by_chr.keys()).union(
-        list(refs_exons_by_chr.keys())
-    )
+    ref_chroms = set(refs_1exon_by_chr.keys()).union(list(refs_exons_by_chr.keys()))
     if genome_chroms is not None:
         diff = ref_chroms.difference(genome_chroms)
         if len(diff) > 0:
@@ -181,9 +183,7 @@ def reference_parser(args, genome_chroms):
     for k in junctions_by_chr:
         junctions_by_chr[k]["donors"] = list(junctions_by_chr[k]["donors"])
         junctions_by_chr[k]["donors"].sort()
-        junctions_by_chr[k]["acceptors"] = list(
-            junctions_by_chr[k]["acceptors"]
-        )
+        junctions_by_chr[k]["acceptors"] = list(junctions_by_chr[k]["acceptors"])
         junctions_by_chr[k]["acceptors"].sort()
         junctions_by_chr[k]["da_pairs"] = list(junctions_by_chr[k]["da_pairs"])
         junctions_by_chr[k]["da_pairs"].sort()
@@ -251,7 +251,6 @@ class myProteinTranscripts(myQueryTranscripts):
         polyA_dist="NA",
         ref_obj=None,
     ):
-
         super().__init__(
             id,
             tss_diff=tss_diff,
@@ -483,23 +482,17 @@ def transcriptsKnownSpliceSites(
 
         if trec.strand == "+":
             isoform_hit.tss_gene_diff = (
-                nearest_start_diff
-                if nearest_start_diff != float("inf")
-                else "NA"
+                nearest_start_diff if nearest_start_diff != float("inf") else "NA"
             )
             isoform_hit.tts_gene_diff = (
                 nearest_end_diff if nearest_end_diff != float("inf") else "NA"
             )
         else:
             isoform_hit.tss_gene_diff = (
-                -nearest_end_diff
-                if nearest_start_diff != float("inf")
-                else "NA"
+                -nearest_end_diff if nearest_start_diff != float("inf") else "NA"
             )
             isoform_hit.tts_gene_diff = (
-                -nearest_start_diff
-                if nearest_end_diff != float("inf")
-                else "NA"
+                -nearest_start_diff if nearest_end_diff != float("inf") else "NA"
             )
 
     def categorize_incomplete_matches(trec, ref):
@@ -526,18 +519,10 @@ def transcriptsKnownSpliceSites(
             if agree_end:
                 return "complete"
             else:  # front agrees, end does not
-                return (
-                    "5prime_fragment"
-                    if trec.strand == "+"
-                    else "3prime_fragment"
-                )
+                return "5prime_fragment" if trec.strand == "+" else "3prime_fragment"
         else:
             if agree_end:  # front does not agree, end agrees
-                return (
-                    "3prime_fragment"
-                    if trec.strand == "+"
-                    else "5prime_fragment"
-                )
+                return "3prime_fragment" if trec.strand == "+" else "5prime_fragment"
             else:
                 return "internal_fragment"
 
@@ -575,19 +560,14 @@ def transcriptsKnownSpliceSites(
     # if trec.id.startswith('PB.1961.2'):
     #    pdb.set_trace()
     if trec.exonCount >= 2:
-
         hits_by_gene = defaultdict(lambda: [])  # gene --> list of hits
         best_by_gene = {}  # gene --> best isoform_hit
 
         if trec.chrom in refs_exons_by_chr:
-            for ref in refs_exons_by_chr[trec.chrom].find(
-                trec.txStart, trec.txEnd
-            ):
+            for ref in refs_exons_by_chr[trec.chrom].find(trec.txStart, trec.txEnd):
                 hits_by_gene[ref.gene].append(ref)
         if trec.chrom in refs_1exon_by_chr:
-            for ref in refs_1exon_by_chr[trec.chrom].find(
-                trec.txStart, trec.txEnd
-            ):
+            for ref in refs_1exon_by_chr[trec.chrom].find(trec.txStart, trec.txEnd):
                 hits_by_gene[ref.gene].append(ref)
 
         if len(hits_by_gene) == 0:
@@ -614,9 +594,7 @@ def transcriptsKnownSpliceSites(
                     isoform_hit.AS_genes.add(ref.gene)
                     continue
 
-                if (
-                    ref.exonCount == 1
-                ):  # mono-exonic reference, handle specially here
+                if ref.exonCount == 1:  # mono-exonic reference, handle specially here
                     if (
                         calc_exon_overlap(trec.exons, ref.exons) > 0
                         and cat_ranking[isoform_hit.str_class]
@@ -639,9 +617,7 @@ def transcriptsKnownSpliceSites(
                             refStart=ref.txStart,
                             refEnd=ref.txEnd,
                             q_splicesite_hit=0,
-                            q_exon_overlap=calc_exon_overlap(
-                                trec.exons, ref.exons
-                            ),
+                            q_exon_overlap=calc_exon_overlap(trec.exons, ref.exons),
                             percAdownTTS=str(percA),
                             seqAdownTTS=seq_downTTS,
                             ref_obj=ref,
@@ -703,9 +679,7 @@ def transcriptsKnownSpliceSites(
                                 q_splicesite_hit=calc_splicesite_agreement(
                                     trec.exons, ref.exons
                                 ),
-                                q_exon_overlap=calc_exon_overlap(
-                                    trec.exons, ref.exons
-                                ),
+                                q_exon_overlap=calc_exon_overlap(trec.exons, ref.exons),
                                 percAdownTTS=str(percA),
                                 seqAdownTTS=seq_downTTS,
                                 ref_obj=ref,
@@ -745,9 +719,7 @@ def transcriptsKnownSpliceSites(
                                 q_splicesite_hit=calc_splicesite_agreement(
                                     trec.exons, ref.exons
                                 ),
-                                q_exon_overlap=calc_exon_overlap(
-                                    trec.exons, ref.exons
-                                ),
+                                q_exon_overlap=calc_exon_overlap(trec.exons, ref.exons),
                                 percAdownTTS=str(percA),
                                 seqAdownTTS=seq_downTTS,
                                 ref_obj=ref,
@@ -756,9 +728,7 @@ def transcriptsKnownSpliceSites(
                     # Some kind of junction match that isn't ISM/FSM
                     # #######################################################
                     elif match_type in ("partial", "concordant", "super"):
-                        q_sp_hit = calc_splicesite_agreement(
-                            trec.exons, ref.exons
-                        )
+                        q_sp_hit = calc_splicesite_agreement(trec.exons, ref.exons)
                         q_ex_overlap = calc_exon_overlap(trec.exons, ref.exons)
                         q_exon_d = abs(trec.exonCount - ref.exonCount)
                         if (
@@ -799,9 +769,7 @@ def transcriptsKnownSpliceSites(
                                 q_splicesite_hit=calc_splicesite_agreement(
                                     trec.exons, ref.exons
                                 ),
-                                q_exon_overlap=calc_exon_overlap(
-                                    trec.exons, ref.exons
-                                ),
+                                q_exon_overlap=calc_exon_overlap(trec.exons, ref.exons),
                                 percAdownTTS=str(percA),
                                 seqAdownTTS=seq_downTTS,
                                 ref_obj=ref,
@@ -813,10 +781,7 @@ def transcriptsKnownSpliceSites(
                         if (
                             cat_ranking[isoform_hit.str_class]
                             < cat_ranking["anyKnownSpliceSite"]
-                            and calc_splicesite_agreement(
-                                trec.exons, ref.exons
-                            )
-                            > 0
+                            and calc_splicesite_agreement(trec.exons, ref.exons) > 0
                         ):
                             isoform_hit = myProteinTranscripts(
                                 trec.id,
@@ -837,9 +802,7 @@ def transcriptsKnownSpliceSites(
                                 q_splicesite_hit=calc_splicesite_agreement(
                                     trec.exons, ref.exons
                                 ),
-                                q_exon_overlap=calc_exon_overlap(
-                                    trec.exons, ref.exons
-                                ),
+                                q_exon_overlap=calc_exon_overlap(trec.exons, ref.exons),
                                 percAdownTTS=str(percA),
                                 seqAdownTTS=seq_downTTS,
                             )
@@ -850,8 +813,7 @@ def transcriptsKnownSpliceSites(
                             if (
                                 cat_ranking[isoform_hit.str_class]
                                 < cat_ranking["geneOverlap"]
-                                and calc_exon_overlap(trec.exons, ref.exons)
-                                > 0
+                                and calc_exon_overlap(trec.exons, ref.exons) > 0
                             ):
                                 isoform_hit = myProteinTranscripts(
                                     trec.id,
@@ -926,18 +888,14 @@ def transcriptsKnownSpliceSites(
                 break
             if calc_overlap(cur_start, cur_end, t.rStart, t.rEnd) <= 0:
                 isoform_hit.genes.append(t.rGene)
-                cur_start, cur_end = min(cur_start, t.rStart), max(
-                    cur_end, t.rEnd
-                )
+                cur_start, cur_end = min(cur_start, t.rStart), max(cur_end, t.rEnd)
 
     ##***************************************####
     ########### UNSPLICED TRANSCRIPTS ###########
     ##***************************************####
     else:  # single exon id
         if trec.chrom in refs_1exon_by_chr:
-            for ref in refs_1exon_by_chr[trec.chrom].find(
-                trec.txStart, trec.txEnd
-            ):
+            for ref in refs_1exon_by_chr[trec.chrom].find(trec.txStart, trec.txEnd):
                 if ref.strand != trec.strand:
                     # opposite strand, just record it in AS_genes
                     isoform_hit.AS_genes.add(ref.gene)
@@ -964,10 +922,7 @@ def transcriptsKnownSpliceSites(
                         seqAdownTTS=seq_downTTS,
                         ref_obj=ref,
                     )
-                elif (
-                    abs(diff_tss) + abs(diff_tts)
-                    < isoform_hit.get_total_diff()
-                ):
+                elif abs(diff_tss) + abs(diff_tts) < isoform_hit.get_total_diff():
                     isoform_hit.modify(
                         ref.id,
                         ref.gene,
@@ -982,9 +937,7 @@ def transcriptsKnownSpliceSites(
             # no hits to single exon genes, let's see if it hits multi-exon genes
             # (1) if it overlaps with a ref exon and is contained in an exon, we call it ISM
             # (2) else, if it is completely within a ref gene start-end region, we call it NIC by intron retention
-            for ref in refs_exons_by_chr[trec.chrom].find(
-                trec.txStart, trec.txEnd
-            ):
+            for ref in refs_exons_by_chr[trec.chrom].find(trec.txStart, trec.txEnd):
                 if (
                     calc_exon_overlap(trec.exons, ref.exons) == 0
                 ):  # no exonic overlap, skip!
@@ -1020,11 +973,9 @@ def transcriptsKnownSpliceSites(
                     isoform_hit.subtype = "mono-exon"
                     # check for intron retention
                     if len(ref.junctions) > 0:
-                        for (d, a) in ref.junctions:
+                        for d, a in ref.junctions:
                             if trec.txStart < d < a < trec.txEnd:
-                                isoform_hit.subtype = (
-                                    "mono-exon_by_intron_retention"
-                                )
+                                isoform_hit.subtype = "mono-exon_by_intron_retention"
                                 break
                     isoform_hit.modify(
                         "novel",
@@ -1117,8 +1068,7 @@ def novelIsoformsKnownGenes(
 
         # (junction index) --> number of refs that have this junction
         junction_ref_hit = dict(
-            (i, all_ref_junctions.count(junc))
-            for i, junc in enumerate(trec.junctions)
+            (i, all_ref_junctions.count(junc)) for i, junc in enumerate(trec.junctions)
         )
 
         # if the same query junction appears in more than one of the hit references, it is not a fusion
@@ -1126,9 +1076,7 @@ def novelIsoformsKnownGenes(
             isoforms_hit.str_class = "moreJunctions"
         else:
             isoforms_hit.str_class = "fusion"
-            isoforms_hit.subtype = (
-                "mono-exon" if trec.exonCount == 1 else "multi-exon"
-            )
+            isoforms_hit.subtype = "mono-exon" if trec.exonCount == 1 else "multi-exon"
 
     if has_intron_retention():
         isoforms_hit.subtype = "intron_retention"
@@ -1235,9 +1183,7 @@ def isoformClassification(
                 )
             elif isoform_hit.str_class in ("", "geneOverlap"):
                 # possibly NNC, genic, genic intron, anti-sense, or intergenic
-                isoform_hit = associationOverlapping(
-                    isoform_hit, rec, junctions_by_chr
-                )
+                isoform_hit = associationOverlapping(isoform_hit, rec, junctions_by_chr)
 
             # # write out junction information
             # write_junctionInfo(rec, junctions_by_chr, accepted_canonical_sites, indelsJunc, genome_dict, fout_junc, covInf=SJcovInfo, covNames=SJcovNames, phyloP_reader=phyloP_reader)
@@ -1291,12 +1237,8 @@ def isoformClassification(
                 if args.is_fusion:
                     # pdb.set_trace()
                     # fusion - special case handling, need to see which part of the ORF this segment falls on
-                    fusion_gene = "PBfusion." + str(
-                        seqid_fusion.match(rec.id).group(1)
-                    )
-                    rec_component_start, rec_component_end = fusion_components[
-                        rec.id
-                    ]
+                    fusion_gene = "PBfusion." + str(seqid_fusion.match(rec.id).group(1))
+                    rec_component_start, rec_component_end = fusion_components[rec.id]
                     rec_len = rec_component_end - rec_component_start + 1
                     if fusion_gene in orfDict:
                         orf_start, orf_end = (
@@ -1316,26 +1258,16 @@ def isoformClassification(
                                 int(_s + isoform_hit.ORFlen),
                                 len(orfDict[fusion_gene].orf_seq),
                             )
-                            isoform_hit.ORFseq = orfDict[fusion_gene].orf_seq[
-                                _s:_e
-                            ]
+                            isoform_hit.ORFseq = orfDict[fusion_gene].orf_seq[_s:_e]
                             isoform_hit.coding = "coding"
-                        elif (
-                            rec_component_start
-                            <= orf_start
-                            < rec_component_end
-                        ):
-                            isoform_hit.CDS_start = (
-                                orf_start - rec_component_start
-                            )
+                        elif rec_component_start <= orf_start < rec_component_end:
+                            isoform_hit.CDS_start = orf_start - rec_component_start
                             if orf_end >= rec_component_end:
                                 isoform_hit.CDS_end = (
                                     rec_component_end - rec_component_start + 1
                                 )
                             else:
-                                isoform_hit.CDS_end = (
-                                    orf_end - rec_component_start + 1
-                                )
+                                isoform_hit.CDS_end = orf_end - rec_component_start + 1
                             isoform_hit.ORFlen = (
                                 isoform_hit.CDS_end - isoform_hit.CDS_start
                             ) / 3
@@ -1343,27 +1275,19 @@ def isoformClassification(
                                 int(isoform_hit.ORFlen),
                                 len(orfDict[fusion_gene].orf_seq),
                             )
-                            isoform_hit.ORFseq = orfDict[fusion_gene].orf_seq[
-                                :_e
-                            ]
+                            isoform_hit.ORFseq = orfDict[fusion_gene].orf_seq[:_e]
                             isoform_hit.coding = "coding"
                 elif (
                     rec.id in orfDict
                 ):  # this will never be true for fusion, so the above code seg runs instead
                     isoform_hit.coding = "coding"
                     isoform_hit.ORFlen = orfDict[rec.id].orf_length
-                    isoform_hit.CDS_start = orfDict[
-                        rec.id
-                    ].cds_start  # 1-based start
-                    isoform_hit.CDS_end = orfDict[
-                        rec.id
-                    ].cds_end  # 1-based end
+                    isoform_hit.CDS_start = orfDict[rec.id].cds_start  # 1-based start
+                    isoform_hit.CDS_end = orfDict[rec.id].cds_end  # 1-based end
                     isoform_hit.ORFseq = orfDict[rec.id].orf_seq
 
             if isoform_hit.coding == "coding":
-                m = (
-                    {}
-                )  # transcript coord (0-based) --> genomic coord (0-based)
+                m = {}  # transcript coord (0-based) --> genomic coord (0-based)
                 if rec.strand == "+":
                     i = 0
                     for exon in rec.exons:
@@ -1390,6 +1314,12 @@ def isoformClassification(
 
                 # NOTE: if using --orf_input, it is possible to see discrepancy between the exon structure
                 # provided by GFF and the input ORF. For now, just shorten it
+                if min(isoform_hit.CDS_end - 1, max(m)) != isoform_hit.CDS_end - 1:
+                    print(isoform_hit.CDS_end - 1)
+                    print(max(m))
+                    print(chrom)
+                    print(rec)
+                    raise ValueError
                 isoform_hit.CDS_genomic_end = (
                     m[min(isoform_hit.CDS_end - 1, max(m))] + 1
                 )  # make it 1-based
@@ -1409,11 +1339,11 @@ def isoformClassification(
                             rec.junctions[0][1] - isoform_hit.CDS_genomic_end
                         )
                     # Changed by DW to match GENCODE definition.
-                    isoform_hit.is_NMD = (
-                        "TRUE" if dist_to_last_junc < 50 else "FALSE"
-                    )
+                    isoform_hit.is_NMD = "TRUE" if dist_to_last_junc < -50 else "FALSE"
                     # can change dist_to_last_junct (above) to < 50, to match gencode nmd definition
-
+                # Mono-exonic transcripts cannot undergo NMD.
+                else:
+                    isoform_hit.is_NMD = "FALSE"
             # find number of junctions downstream of stop codon
             # added as an ad hoc attribute of isoform_hit
             if isoform_hit.CDS_genomic_end != "NA":
@@ -1478,10 +1408,7 @@ def determine_extent_of_upstream_overhang(r1, r2):
     if match is not None and match.ref_idx is not None:
         # pre: this exon in r1 (query) and r2 (ref) matches in the end
         # calculate overhang as the difference in the start
-        overhang = (
-            r2.segments[match.ref_idx].start
-            - r1.segments[match.query_idx].start
-        )
+        overhang = r2.segments[match.ref_idx].start - r1.segments[match.query_idx].start
         return overhang
     else:
         return None
@@ -1489,15 +1416,11 @@ def determine_extent_of_upstream_overhang(r1, r2):
 
 def determine_extent_of_downstream_overhang(r1, r2):
     # r2 is ref, and matched at the most 3' start site (if + strand)
-    match = find_indices_for_exons_with_downstream_most_common_splicsite(
-        r1, r2
-    )
+    match = find_indices_for_exons_with_downstream_most_common_splicsite(r1, r2)
     if match is not None and match.ref_idx is not None:
         # pre: this exon in r1 (query) and r2 (ref) matches in the start
         # calculate overhang as the difference in the end
-        overhang = (
-            r1.segments[match.query_idx].end - r2.segments[match.ref_idx].end
-        )
+        overhang = r1.segments[match.query_idx].end - r2.segments[match.ref_idx].end
         return overhang
     else:
         return None
@@ -1526,9 +1449,7 @@ def get_perfect_subset_status(r1, r2):
     assert r1.strand in ("+", "-")
     if r1.strand != r2.strand:
         raise Exception(
-            "ERROR! query is {0} strand but ref is {1}!".format(
-                r1.strand, r2.strand
-            )
+            "ERROR! query is {0} strand but ref is {1}!".format(r1.strand, r2.strand)
         )
 
     if r1.strand == "+":
@@ -1553,14 +1474,10 @@ if __name__ == "__main__":
 
     parser = ArgumentParser()
 
-    parser.add_argument(
-        "isoform_gff", help="Input isoform GFF3, for transcript"
-    )
+    parser.add_argument("isoform_gff", help="Input isoform GFF3, for transcript")
     parser.add_argument("cds_isoform_gff", help="Input isoform GFF3, for CDS")
     parser.add_argument("orf_tsv", help="Predicted ORF tsv")
-    parser.add_argument(
-        "annotation_gtf", help="Annotation GTF, for transcript"
-    )
+    parser.add_argument("annotation_gtf", help="Annotation GTF, for transcript")
     parser.add_argument("cds_annotation_gtf", help="Annotation GTF, for CDS")
     parser.add_argument(
         "-d",
@@ -1688,9 +1605,7 @@ if __name__ == "__main__":
     ) = reference_parser(protein_args, genome_chroms=None)
 
     ## parse query isoforms
-    protein_isoforms_by_chr, queryDict_cds = protein_isoforms_parser(
-        protein_args
-    )
+    protein_isoforms_by_chr, queryDict_cds = protein_isoforms_parser(protein_args)
 
     # isoform classification
     # note - orfDict is input, but results not in use for cds compare
